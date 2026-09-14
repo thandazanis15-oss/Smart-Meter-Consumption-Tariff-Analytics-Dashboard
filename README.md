@@ -116,7 +116,7 @@ This section can be updated with project images when you are ready to showcase t
 
 ```bash
 git clone <your-repository-url>
-cd "Hospital system"
+cd "Smart-Meter-Consumption-Tarrif-Analysis-Dashboard"
 ```
 
 ### 2. Set up the backend
