@@ -338,6 +338,59 @@ button, input, select {
   letter-spacing: -0.04em;
 }
 
+.admin-panel {
+  gap: 10px;
+}
+
+.admin-controls-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-notice-input {
+  width: 100%;
+  min-height: 42px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(8, 13, 19, 0.9);
+  color: #f8fafc;
+  padding: 10px 12px;
+}
+
+.admin-panel-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.admin-list-title {
+  font-size: 0.82rem;
+  color: #ffb4b4;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-user-row {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.68);
+  border: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.admin-user-row span {
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+.admin-user-row small,
+.admin-last-notice {
+  color: #cbd5e1;
+}
+
 .main-panel {
   padding: 18px 20px 20px;
   background: rgba(15, 21, 27, 0.64);
@@ -423,6 +476,51 @@ h3 {
   background: rgba(248, 113, 113, 0.12);
   border: 1px solid rgba(248, 113, 113, 0.25);
   color: #fca5a5;
+}
+
+.user-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.user-badge-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  line-height: 1.15;
+}
+
+.user-badge strong {
+  font-size: 0.96rem;
+  color: #f8fafc;
+  letter-spacing: -0.02em;
+}
+
+.user-badge small {
+  font-size: 0.72rem;
+  color: #cbd5e1;
+}
+
+.user-role-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(255, 122, 122, 0.12);
+  border: 1px solid rgba(255, 122, 122, 0.25);
+  color: #ffb4b4;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .toolbar-card {

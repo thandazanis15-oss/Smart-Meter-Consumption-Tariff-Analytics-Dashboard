@@ -205,6 +205,28 @@ async def login_user(payload: LoginRequest) -> dict[str, Any]:
     raise HTTPException(status_code=401, detail="Invalid username or password.")
 
 
+@app.get("/admin/users")
+async def admin_users() -> list[dict[str, Any]]:
+    users = load_users()
+    return [
+        {
+            "username": user.get("username", "Unknown"),
+            "email": user.get("email", ""),
+            "role": user.get("role", "user"),
+            "created_at": user.get("created_at", "unknown"),
+        }
+        for user in users
+    ]
+
+
+@app.post("/admin/notice")
+async def admin_notice(payload: dict[str, str]) -> dict[str, str]:
+    message = (payload.get("message") or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Notice message is required.")
+    return {"message": message, "status": "broadcasted"}
+
+
 def generate_hourly_payload(hour_index: int) -> dict[str, Any]:
     now = datetime.now().replace(minute=0, second=0, microsecond=0)
     current_hour = now - timedelta(hours=hour_index)

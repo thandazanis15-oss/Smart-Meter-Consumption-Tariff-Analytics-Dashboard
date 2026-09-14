@@ -126,6 +126,9 @@ function App() {
   const [credentials, setCredentials] = useState({ username: '', email: '', password: '' })
   const [registerPasswordConfirm, setRegisterPasswordConfirm] = useState('')
   const [authUser, setAuthUser] = useState<AuthUser | null>(null)
+  const [registeredUsers, setRegisteredUsers] = useState<AuthUser[]>([])
+  const [noticeMessage, setNoticeMessage] = useState('')
+  const [lastNotice, setLastNotice] = useState('')
   const [dateRange, setDateRange] = useState({ start: '', end: '' })
   const [filters, setFilters] = useState({ region: 'All regions', substation: 'All grids', account: 'All accounts' })
   const [loading, setLoading] = useState(false)
@@ -245,8 +248,13 @@ function App() {
     const total = data.reduce((sum, point) => sum + point.consumption_kwh, 0)
     const peak = data.filter((point) => point.tariff === 'peak')
     const offPeak = data.filter((point) => point.tariff === 'off_peak')
+    const peakConsumption = peak.reduce((sum, point) => sum + point.consumption_kwh, 0)
+    const offPeakConsumption = offPeak.reduce((sum, point) => sum + point.consumption_kwh, 0)
     const peakCost = peak.reduce((sum, point) => sum + point.estimated_cost, 0)
     const offPeakCost = offPeak.reduce((sum, point) => sum + point.estimated_cost, 0)
+    const totalCost = peakCost + offPeakCost
+    const totalConsumptionCheck = peakConsumption + offPeakConsumption
+    const costCheck = peakCost + offPeakCost
     const anomalies = data.filter((point) => point.anomaly).length
     const maxPoint = data.reduce<MeterPoint | null>((best, point) => {
       if (!best || point.consumption_kwh > best.consumption_kwh) return point
@@ -255,13 +263,23 @@ function App() {
     const avgTemperature = data.length
       ? data.reduce((sum, point) => sum + point.temperature_c, 0) / data.length
       : 0
+    const averageUnitRate = total > 0 ? totalCost / total : 0
+    const peakShare = totalCost > 0 ? (peakCost / totalCost) * 100 : 0
+    const offPeakShare = totalCost > 0 ? (offPeakCost / totalCost) * 100 : 0
 
     return {
       total,
+      totalConsumptionCheck,
+      peakConsumption,
+      offPeakConsumption,
       avg: data.length ? total / data.length : 0,
       peakCost,
       offPeakCost,
-      totalCost: peakCost + offPeakCost,
+      totalCost,
+      costCheck,
+      averageUnitRate,
+      peakShare,
+      offPeakShare,
       anomalies,
       anomalyRate: data.length ? (anomalies / data.length) * 100 : 0,
       maxPoint,
@@ -483,6 +501,59 @@ function App() {
     fetchHistory(dateRange.start || undefined, dateRange.end || undefined)
   }
 
+  const loadRegisteredUsers = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/admin/users`)
+      if (!response.ok) {
+        throw new Error('Failed to load users')
+      }
+
+      const data = (await response.json()) as Array<{ username: string; email: string; role: string }>
+      setRegisteredUsers(
+        data.map((user) => ({
+          username: user.username,
+          email: user.email,
+          role: user.role === 'admin' ? 'admin' : 'user',
+        })),
+      )
+    } catch {
+      setRegisteredUsers([])
+    }
+  }
+
+  const handleBroadcastNotice = async () => {
+    const trimmed = noticeMessage.trim()
+    if (!trimmed) {
+      setLoginError('Please type a notice before broadcasting.')
+      return
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/admin/notice`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: trimmed }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Notice failed to broadcast')
+      }
+
+      const payload = (await response.json()) as { message?: string }
+      setLastNotice(payload.message || trimmed)
+      setNoticeMessage('')
+      setLoginError('')
+    } catch {
+      setLoginError('Unable to broadcast the notice right now.')
+    }
+  }
+
+  useEffect(() => {
+    if (authUser?.role === 'admin') {
+      loadRegisteredUsers()
+    }
+  }, [authUser?.role])
+
   const exportReport = async (format: 'csv' | 'xlsx' | 'pdf' = 'csv') => {
     if (!sourceData.length) {
       setLoginError('No data available to export for the selected range.')
@@ -508,6 +579,8 @@ function App() {
     const reportOffPeakCost = reportSummary.offPeakCost
     const reportTotalCost = reportSummary.totalCost
     const reportAnomalies = reportSummary.anomalies
+    const reportAverageUnitRate = reportSummary.averageUnitRate
+    const reportPeakShare = reportSummary.peakShare
 
     if (format === 'xlsx') {
       const workbook = XLSX.utils.book_new()
@@ -519,6 +592,8 @@ function App() {
         ['Peak billing', formatCurrency(reportPeakCost)],
         ['Off-peak billing', formatCurrency(reportOffPeakCost)],
         ['Total billed cost', formatCurrency(reportTotalCost)],
+        ['Average unit rate', `${reportAverageUnitRate > 0 ? formatCurrency(reportAverageUnitRate) : '$0.00'} / kWh`],
+        ['Peak share', `${reportPeakShare.toFixed(1)}%`],
         ['Anomaly alerts', reportAnomalies],
         ['Data points', rows.length],
       ]
@@ -567,7 +642,8 @@ function App() {
       doc.setFontSize(10)
       doc.text(`Range: ${reportRange}`, 60, 258)
       doc.text(`Data points: ${rows.length}`, 60, 276)
-      doc.text(`Billing window: ${summary.totalCost > 0 ? 'Active' : 'No activity'}`, 60, 294)
+      doc.text(`Math: total bill = peak + off-peak = ${formatCurrency(reportPeakCost)} + ${formatCurrency(reportOffPeakCost)}`, 60, 294)
+      doc.text(`Average unit rate: ${reportAverageUnitRate > 0 ? formatCurrency(reportAverageUnitRate) : '$0.00'} / kWh`, 60, 312)
 
       doc.setFillColor(255, 255, 255)
       doc.roundedRect(285, 208, 240, 112, 14, 14, 'F')
@@ -624,6 +700,8 @@ function App() {
         { label: 'Peak demand', value: `${sourceData.reduce((max, point) => Math.max(max, point.demand_kw), 0).toFixed(1)} kW` },
         { label: 'Peak billing', value: formatCurrency(reportPeakCost) },
         { label: 'Off-peak billing', value: formatCurrency(reportOffPeakCost) },
+        { label: 'Average unit rate', value: `${reportAverageUnitRate > 0 ? formatCurrency(reportAverageUnitRate) : '$0.00'} / kWh` },
+        { label: 'Peak share', value: `${reportPeakShare.toFixed(1)}%` },
       ]
 
       summaryCards.forEach((card, index) => {
@@ -1031,16 +1109,37 @@ function App() {
           <strong>{dateRange.start || 'All data'} → {dateRange.end || 'Now'}</strong>
         </div>
         <div className="report-card">
-          <span>Avg load</span>
-          <strong>{summary.avg.toFixed(1)} kWh</strong>
+          <span>Total energy</span>
+          <strong>{summary.total.toFixed(1)} kWh</strong>
         </div>
         <div className="report-card">
-          <span>Peak cost share</span>
-          <strong>{(summary.peakCost / Math.max(summary.totalCost, 0.01) * 100).toFixed(1)}%</strong>
+          <span>Peak energy</span>
+          <strong>{summary.peakConsumption.toFixed(1)} kWh</strong>
+        </div>
+        <div className="report-card">
+          <span>Off-peak energy</span>
+          <strong>{summary.offPeakConsumption.toFixed(1)} kWh</strong>
+        </div>
+        <div className="report-card">
+          <span>Peak cost</span>
+          <strong>{formatCurrency(summary.peakCost)}</strong>
+        </div>
+        <div className="report-card">
+          <span>Off-peak cost</span>
+          <strong>{formatCurrency(summary.offPeakCost)}</strong>
+        </div>
+        <div className="report-card">
+          <span>Total billed</span>
+          <strong>{formatCurrency(summary.totalCost)}</strong>
+        </div>
+        <div className="report-card">
+          <span>Average unit rate</span>
+          <strong>{summary.averageUnitRate > 0 ? formatCurrency(summary.averageUnitRate) : '$0.00'} / kWh</strong>
         </div>
       </div>
       <div className="report-callout">
-        Smart-meter telemetry remains within approved operating thresholds. Peak demand periods show elevated charging schedules, while anomaly events remain under the alert threshold for dispatch. Export the current billing report to share with finance or control-room teams.
+        <strong>Formula check:</strong> total energy = peak energy + off-peak energy = {summary.peakConsumption.toFixed(1)} + {summary.offPeakConsumption.toFixed(1)} = {summary.total.toFixed(1)} kWh.<br />
+        <strong>Billing check:</strong> total billed = peak cost + off-peak cost = {formatCurrency(summary.peakCost)} + {formatCurrency(summary.offPeakCost)} = {formatCurrency(summary.totalCost)}.
       </div>
     </section>
   )
@@ -1061,7 +1160,7 @@ function App() {
 
               <div className="login-heading">
                 <p className="eyebrow">Secure access</p>
-                <h2>{authMode === 'login' ? 'Welcome back' : 'Create account'}</h2>
+                <h2>{authMode === 'login' ? 'Sign in' : 'Create account'}</h2>
               </div>
 
               <div className="auth-toggle" aria-label="Authentication mode">
@@ -1167,8 +1266,33 @@ function App() {
               <div className="sidebar-card admin-panel">
                 <span>Admin controls</span>
                 <strong>Access granted</strong>
-                <small>Only administrators can view this section.</small>
-                <button type="button" className="secondary-button admin-button">Broadcast notice</button>
+                <small>Broadcast notices and review the current registered users.</small>
+                <div className="admin-controls-stack">
+                  <input
+                    type="text"
+                    value={noticeMessage}
+                    onChange={(event) => setNoticeMessage(event.target.value)}
+                    placeholder="Type a system notice"
+                    className="admin-notice-input"
+                  />
+                  <button type="button" className="secondary-button admin-button" onClick={handleBroadcastNotice}>
+                    Broadcast notice
+                  </button>
+                </div>
+                <div className="admin-panel-list">
+                  <strong className="admin-list-title">Registered users</strong>
+                  {registeredUsers.length > 0 ? (
+                    registeredUsers.slice(0, 6).map((user) => (
+                      <div key={`${user.username}-${user.email}`} className="admin-user-row">
+                        <span>{user.username}</span>
+                        <small>{user.email}</small>
+                      </div>
+                    ))
+                  ) : (
+                    <small>No users loaded yet.</small>
+                  )}
+                </div>
+                {lastNotice && <small className="admin-last-notice">Last notice: {lastNotice}</small>}
               </div>
             )}
           </aside>
@@ -1195,9 +1319,11 @@ function App() {
                   Refresh
                 </button>
                 <div className="user-badge">
-                  <span>{authUser?.role === 'admin' ? 'Admin' : 'User'}</span>
-                  <strong>{authUser?.username || 'User'}</strong>
-                  <small>{authUser?.email || 'No email on record'}</small>
+                  <div className="user-badge-meta">
+                    <strong>{authUser?.username || 'User'}</strong>
+                    <small>{authUser?.email || 'No email on record'}</small>
+                  </div>
+                  <span className="user-role-pill">{authUser?.role === 'admin' ? 'Admin' : 'User'}</span>
                 </div>
                 <button
                   className="ghost-button"
