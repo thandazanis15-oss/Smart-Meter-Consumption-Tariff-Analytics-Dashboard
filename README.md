@@ -83,7 +83,7 @@ Frontend Dashboard
 ## Project Structure
 
 ```text
-Hospital system/
+Smart Meter Dashboard/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py
