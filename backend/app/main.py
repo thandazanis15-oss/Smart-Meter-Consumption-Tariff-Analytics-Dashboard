@@ -5,16 +5,20 @@ import csv
 import hashlib
 import io
 import json
+import os
 import random
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 import uvicorn
+
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 app = FastAPI(title="Smart Meter Billing Engine")
 
@@ -34,6 +38,8 @@ HOURLY_PROFILE = {
 }
 
 USERS_FILE = Path(__file__).with_name("users.json")
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "change-me-private")
 
 
 class RegisterRequest(BaseModel):
@@ -45,6 +51,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
+    role: str | None = None
 
 
 def hash_password(password: str) -> str:
@@ -68,9 +75,9 @@ def normalize_user_record(user: dict[str, Any]) -> dict[str, Any]:
 def load_users() -> list[dict[str, Any]]:
     if not USERS_FILE.exists():
         default_users = [{
-            "username": "Thanda",
+            "username": ADMIN_USERNAME,
             "email": "admin@smartmeter.local",
-            "password_hash": hash_password("1234554321"),
+            "password_hash": hash_password(ADMIN_PASSWORD),
             "role": "admin",
             "created_at": datetime.utcnow().isoformat(timespec="seconds"),
         }]
@@ -81,9 +88,9 @@ def load_users() -> list[dict[str, Any]]:
         raw = USERS_FILE.read_text(encoding="utf-8")
         if not raw.strip():
             default_users = [{
-                "username": "Thanda",
+                "username": ADMIN_USERNAME,
                 "email": "admin@smartmeter.local",
-                "password_hash": hash_password("1234554321"),
+                "password_hash": hash_password(ADMIN_PASSWORD),
                 "role": "admin",
                 "created_at": datetime.utcnow().isoformat(timespec="seconds"),
             }]
@@ -98,7 +105,7 @@ def load_users() -> list[dict[str, Any]]:
                     "username": username,
                     "email": f"{username.lower()}@smartmeter.local",
                     "password_hash": password_hash,
-                    "role": "admin" if username.lower() == "thanda" else "user",
+                    "role": "admin" if username.lower() == ADMIN_USERNAME.lower() else "user",
                     "created_at": datetime.utcnow().isoformat(timespec="seconds"),
                 })
             USERS_FILE.write_text(json.dumps(migrated, indent=2), encoding="utf-8")
@@ -107,9 +114,9 @@ def load_users() -> list[dict[str, Any]]:
         return [normalize_user_record(user) for user in parsed]
     except json.JSONDecodeError:
         fallback = [{
-            "username": "Thanda",
+            "username": ADMIN_USERNAME,
             "email": "admin@smartmeter.local",
-            "password_hash": hash_password("1234554321"),
+            "password_hash": hash_password(ADMIN_PASSWORD),
             "role": "admin",
             "created_at": datetime.utcnow().isoformat(timespec="seconds"),
         }]
@@ -173,11 +180,17 @@ async def register_user(payload: RegisterRequest) -> dict[str, Any]:
 async def login_user(payload: LoginRequest) -> dict[str, Any]:
     username = payload.username.strip()
     password = payload.password.strip()
+    requested_role = (payload.role or "").strip().lower()
+
     if not username or not password:
         raise HTTPException(status_code=400, detail="Username and password are required.")
 
     user = find_user(username)
     if user and user.get("password_hash") == hash_password(password):
+        if requested_role in {"admin", "administrator"} and user.get("role") != "admin":
+            raise HTTPException(status_code=401, detail="This account is not authorized for admin login.")
+        if requested_role in {"department", "member", "user"} and user.get("role") == "admin":
+            raise HTTPException(status_code=401, detail="Use the Admin option for administrator access.")
         return {
             "message": "Login successful.",
             "user": {
@@ -187,9 +200,11 @@ async def login_user(payload: LoginRequest) -> dict[str, Any]:
             },
         }
 
-    if username == "Thanda" and password == "1234554321":
-        admin_user = find_user("Thanda") or {
-            "username": "Thanda",
+    if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+        if requested_role in {"department", "member", "user"}:
+            raise HTTPException(status_code=401, detail="Use the Admin option for administrator access.")
+        admin_user = find_user(ADMIN_USERNAME) or {
+            "username": ADMIN_USERNAME,
             "email": "admin@smartmeter.local",
             "role": "admin",
         }
@@ -201,6 +216,9 @@ async def login_user(payload: LoginRequest) -> dict[str, Any]:
                 "role": "admin",
             },
         }
+
+    if requested_role in {"department", "member", "user"}:
+        raise HTTPException(status_code=401, detail="Department member account not found or credentials are incorrect.")
 
     raise HTTPException(status_code=401, detail="Invalid username or password.")
 

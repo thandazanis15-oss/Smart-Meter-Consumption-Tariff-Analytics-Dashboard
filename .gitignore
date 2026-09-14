@@ -4,4 +4,7 @@ __pycache__/
 node_modules/
 dist/
 .env
+backend/.env
+backend/app/users.json
+.vscode/
 .DS_Store

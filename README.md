@@ -57,10 +57,11 @@ Smart meter analytics is a high-value domain in energy management, infrastructur
 
 ## Default Demo Admin
 
-This project includes a demo admin account for local presentation use:
+The project keeps the administrator credentials private and outside the public repository.
 
-- Username: Thanda
-- Password: 1234554321
+- Copy [backend/.env.example](backend/.env.example) to [backend/.env](backend/.env) and set your own local admin values.
+- The real credentials are stored locally and are not published in the codebase.
+- Public documentation does not expose the actual username or password.
 
 ## System Architecture
 
@@ -125,8 +126,11 @@ cd backend
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
+copy .env.example .env
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
+
+Use your own private values in [backend/.env](backend/.env) before running the app.
 
 ### 3. Set up the frontend
 
