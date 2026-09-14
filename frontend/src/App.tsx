@@ -34,6 +34,7 @@ type MeterPoint = {
 }
 
 type DashboardTab = 'Overview' | 'Billing' | 'Alerts' | 'Reports'
+type LoginRole = 'admin' | 'department'
 type AuthUser = {
   username: string
   email: string
@@ -53,10 +54,6 @@ const getApiBase = () => {
 
 const API_BASE = getApiBase()
 const getWebSocketUrl = () => `${API_BASE.replace(/^http/, 'ws')}/ws/metrics`
-const DEMO_LOGIN = {
-  username: 'Thanda',
-  password: '1234554321',
-}
 const AUTH_STORAGE_KEY = 'smart-meter-auth-user'
 
 const readStoredUser = (): AuthUser | null => {
@@ -122,6 +119,7 @@ function App() {
   const [connected, setConnected] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
+  const [loginRole, setLoginRole] = useState<LoginRole>('admin')
   const [loginError, setLoginError] = useState('')
   const [credentials, setCredentials] = useState({ username: '', email: '', password: '' })
   const [registerPasswordConfirm, setRegisterPasswordConfirm] = useState('')
@@ -362,7 +360,7 @@ function App() {
       const response = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, role: loginRole }),
       })
 
       if (response.ok) {
@@ -382,42 +380,8 @@ function App() {
       }
 
       const errorPayload = (await response.json().catch(() => ({ detail: 'Invalid credentials.' }))) as { detail?: string }
-      if (
-        username === DEMO_LOGIN.username &&
-        password === DEMO_LOGIN.password
-      ) {
-        const demoUser: AuthUser = {
-          username: DEMO_LOGIN.username,
-          email: 'admin@smartmeter.local',
-          role: 'admin',
-        }
-        writeStoredUser(demoUser)
-        setAuthUser(demoUser)
-        setCredentials({ username: DEMO_LOGIN.username, email: demoUser.email, password: '' })
-        setLoginError('')
-        setIsAuthenticated(true)
-        return
-      }
-
       setLoginError(errorPayload.detail || 'Invalid credentials. Please check your username and password.')
     } catch {
-      if (
-        username === DEMO_LOGIN.username &&
-        password === DEMO_LOGIN.password
-      ) {
-        const demoUser: AuthUser = {
-          username: DEMO_LOGIN.username,
-          email: 'admin@smartmeter.local',
-          role: 'admin',
-        }
-        writeStoredUser(demoUser)
-        setAuthUser(demoUser)
-        setCredentials({ username: DEMO_LOGIN.username, email: demoUser.email, password: '' })
-        setLoginError('')
-        setIsAuthenticated(true)
-        return
-      }
-
       setLoginError('Unable to reach the authentication service. Please try again.')
     }
   }
@@ -1162,6 +1126,31 @@ function App() {
                 <p className="eyebrow">Secure access</p>
                 <h2>{authMode === 'login' ? 'Sign in' : 'Create account'}</h2>
               </div>
+
+              {authMode === 'login' && (
+                <div className="auth-toggle" aria-label="Login as role">
+                  <button
+                    type="button"
+                    className={loginRole === 'admin' ? 'active' : ''}
+                    onClick={() => {
+                      setLoginRole('admin')
+                      setLoginError('')
+                    }}
+                  >
+                    Admin
+                  </button>
+                  <button
+                    type="button"
+                    className={loginRole === 'department' ? 'active' : ''}
+                    onClick={() => {
+                      setLoginRole('department')
+                      setLoginError('')
+                    }}
+                  >
+                    Department member
+                  </button>
+                </div>
+              )}
 
               <div className="auth-toggle" aria-label="Authentication mode">
                 <button
